@@ -1,6 +1,5 @@
 import os
 import argparse
-import sys
 import shutil
 
 from webdav import client as webdav
@@ -26,7 +25,7 @@ class PathList(argparse._StoreAction):
         path = os.path.abspath(path)
         path = path.lstrip('/')
         path = os.path.join(ROOT_DIR, path)
-        if not os.path.isdir(path):
+        if not os.path.exists(path):
             raise argparse.ArgumentError(self, 'Local directory "%s" does not exist' % path)
         return path
 
@@ -60,6 +59,12 @@ cli_parser.add_argument\
     , default=False
     , help='delete source files after complete'
     )
+cli_parser.add_argument\
+    ( '--method'
+    , default='upload_sync'
+    , choices=['upload_sync', 'upload_async', 'push']
+    , help='method of syncronisation'
+    )
 
 
 config_parser = configparser.SafeConfigParser()
@@ -91,7 +96,7 @@ def prepare_args():
 
     # Get options from CL and override
     section = 'backup'
-    for option in ('config', 'clean', 'daemon', 'source', 'destination'):
+    for option in ('config', 'clean', 'daemon', 'source', 'destination', 'method'):
         try:
             result[section][option]
         except (IndexError, KeyError):
@@ -103,6 +108,22 @@ def prepare_args():
     return result
 
 
+def ensure_dir(client, path):
+    path = os.path.dirname(path)
+    prev = '/'
+    for d in path.split(os.path.sep):
+        if prev:
+            d = os.path.join(prev, d)
+        try:
+            if d != '/':
+                client.mkdir(d)
+            prev = d
+        except Exception as e:
+            pass
+    # instead of check
+    client.list(path)
+
+
 def main():
     args = prepare_args()
     backup = args['backup']
@@ -110,10 +131,19 @@ def main():
 
     client = webdav.Client(options)
     for source in backup['source']:
-        client.push\
-            ( local_directory=source
-            , remote_directory=backup['destination']
-            )
+        method_name = backup['method']
+        method = getattr(client, method_name)
+        ensure_dir(client, backup['destination'])
+        if method_name in ('upload_sync', 'upload_sync'):
+            method\
+                ( local_path=source
+                , remote_path=backup['destination']
+                )
+        else:
+            method\
+                ( local_directory=source
+                , remote_directory=backup['destination']
+                )
 
     if backup['clean']:
         for source in backup['source']:
