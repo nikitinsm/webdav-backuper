@@ -103,7 +103,11 @@ def prepare_args():
     return result
 
 
-def main(backup, options, **kwargs):
+def main():
+    args = prepare_args()
+    backup = args['backup']
+    options = args['options']
+
     client = webdav.Client(options)
     for source in backup['source']:
         client.push\
@@ -120,8 +124,4 @@ def main(backup, options, **kwargs):
 
 
 if __name__ == '__main__':
-    try:
-        main(**prepare_args())
-    except argparse.ArgumentError:
-        err = sys.exc_info()[1]
-        cli_parser.error(str(err))
+    main()
